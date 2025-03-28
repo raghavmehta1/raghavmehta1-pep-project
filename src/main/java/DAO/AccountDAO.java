@@ -4,10 +4,10 @@ import Model.Account;
 import Util.ConnectionUtil;
 //ssd
 import java.sql.*;
-//sdsd
+//sdsdw
 public class AccountDAO {
     
-
+//sdsd
     public Account createAccount(Account account) {
         Connection connection = ConnectionUtil.getConnection();
         try {
