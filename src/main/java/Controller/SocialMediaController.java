@@ -1,129 +1,132 @@
 package Controller;
 
-import Model.Account;
-import Model.Message;
-import com.fasterxml.jackson.core.JsonProcessingException;
-import com.fasterxml.jackson.databind.JsonNode;
-import com.fasterxml.jackson.databind.ObjectMapper;
 import io.javalin.Javalin;
 import io.javalin.http.Context;
-import Service.*;
-import javax.security.auth.login.CredentialNotFoundException;
+import com.fasterxml.jackson.core.JsonProcessingException;
+import com.fasterxml.jackson.databind.ObjectMapper;
+import Model.Account;
+import Model.Message;
+import Service.AccountService;
+import Service.MessageService;
 
+/**
+ * This class implements the social media controller with all required endpoints.
+ */
 public class SocialMediaController {
+    private AccountService accountService;
+    private MessageService messageService;
+    private ObjectMapper mapper;
 
+    public SocialMediaController() {
+        this.accountService = new AccountService();
+        this.messageService = new MessageService();
+        this.mapper = new ObjectMapper();
+    }
+
+    /**
+     * This method sets up all the endpoints for the social media application.
+     */
     public Javalin startAPI() {
         Javalin app = Javalin.create();
-        app.post("/register", this::registerNewUser);
-        app.post("/login", this::login);
-        app.post("/messages", this::createMessage);
-        app.get("/messages", this::getAllMessages);
-        app.get("/messages/{message_id}", this::getMessage);
-        app.delete("/messages/{message_id}", this::deleteMessage);
-        app.patch("/messages/{message_id}", this::updateMessage);
-        app.get("/accounts/{account_id}/messages", this::getUsersMessages);
+        
+        // Account endpoints
+        app.post("/register", this::registerHandler);
+        app.post("/login", this::loginHandler);
+        
+        // Message endpoints
+        app.post("/messages", this::createMessageHandler);
+        app.get("/messages", this::getAllMessagesHandler);
+        app.get("/messages/{message_id}", this::getMessageByIdHandler);
+        app.delete("/messages/{message_id}", this::deleteMessageHandler);
+        app.patch("/messages/{message_id}", this::updateMessageHandler);
+        app.get("/accounts/{account_id}/messages", this::getMessagesByUserHandler);
 
         return app;
     }
 
-    private static final ObjectMapper om = new ObjectMapper();
-    private final Service svc = new Service();
-
-    private void registerNewUser(Context ctx) throws JsonProcessingException {
-        Account newAccount = om.readValue(ctx.body(), Account.class);
+    private void registerHandler(Context ctx) {
         try {
-            newAccount = svc.registerNewUser(newAccount);
-            String resultString = om.writeValueAsString(newAccount);
-            ctx.result(resultString);
-
-        } catch (InvalidUsernameException | UnacceptablePasswordException | UsernameTakenException e) {
-            ctx.result("").status(400);
-        }
-    }
-
-    private void login(Context ctx) throws JsonProcessingException {
-        Account userAccount = om.readValue(ctx.body(), Account.class);
-        try {
-            userAccount = svc.userLogin(userAccount.getUsername(), userAccount.getPassword());
-            String body = om.writeValueAsString(userAccount);
-            ctx.result(body);
-        } catch (CredentialNotFoundException e) {
-            ctx.result("").status(401);
-        }
-    }
-
-    private void createMessage(Context ctx) throws JsonProcessingException {
-        Message newMessage = om.readValue(ctx.body(), Message.class);                   // Does not handle malformed JSON. Will return 500 (should be 400)
-        try {
-            newMessage = svc.createNewMessage(newMessage);
-            String resultString = om.writeValueAsString(newMessage);
-            ctx.result(resultString);
-        } catch (MessageLengthOOBException | InvalidAccountIDException e) {
+            Account account = mapper.readValue(ctx.body(), Account.class);
+            Account registeredAccount = accountService.registerAccount(account);
+            if (registeredAccount != null) {
+                ctx.json(registeredAccount);
+            } else {
+                ctx.status(400);
+            }
+        } catch (JsonProcessingException e) {
             ctx.status(400);
         }
     }
 
-    private void getAllMessages(Context ctx) throws JsonProcessingException {
-        String resultString = om.writeValueAsString(svc.getAllMessages());
-        ctx.result(resultString);
-    }
-
-    private void updateMessage(Context ctx) throws JsonProcessingException {
-        JsonNode root = om.readTree(ctx.body());
-        String messageText = root.get("message_text").asText();
-
-        if (messageText == null || messageText.trim().isEmpty() || messageText.length() > 255) {
-            ctx.result("").status(400);
-            return;
-        }
-
+    private void loginHandler(Context ctx) {
         try {
-            int message_id = Integer.parseInt(ctx.pathParam("message_id"));
-            Message updatedMessage = svc.updateMessage(message_id, messageText);
-            String resultString = om.writeValueAsString(updatedMessage);
-            ctx.result(resultString);
-        } catch (InvalidMessageIDException e) {
-            ctx.result("").status(400);
-        } catch (NumberFormatException e) {
-            ctx.result("").status(400);
+            Account credentials = mapper.readValue(ctx.body(), Account.class);
+            Account loggedInAccount = accountService.login(credentials.getUsername(), credentials.getPassword());
+            if (loggedInAccount != null) {
+                ctx.json(loggedInAccount);
+            } else {
+                ctx.status(401);
+            }
+        } catch (JsonProcessingException e) {
+            ctx.status(401);
         }
     }
 
-    private void getMessage(Context ctx) throws JsonProcessingException {
+    private void createMessageHandler(Context ctx) {
+        try {
+            Message message = mapper.readValue(ctx.body(), Message.class);
+            Message createdMessage = messageService.createMessage(message);
+            if (createdMessage != null) {
+                ctx.json(createdMessage);
+            } else {
+                ctx.status(400);
+            }
+        } catch (JsonProcessingException e) {
+            ctx.status(400);
+        }
+    }
+
+    private void getAllMessagesHandler(Context ctx) {
+        ctx.json(messageService.getAllMessages());
+    }
+
+    private void getMessageByIdHandler(Context ctx) {
+        int messageId = Integer.parseInt(ctx.pathParam("message_id"));
+        Message message = messageService.getMessageById(messageId);
+        if (message != null) {
+            ctx.json(message);
+        } else {
+            ctx.json("");
+        }
+    }
+
+    private void deleteMessageHandler(Context ctx) {
+        int messageId = Integer.parseInt(ctx.pathParam("message_id"));
+        Message deletedMessage = messageService.deleteMessage(messageId);
+        if (deletedMessage != null) {
+            ctx.json(deletedMessage);
+        } else {
+            ctx.json("");
+        }
+    }
+
+    private void updateMessageHandler(Context ctx) {
         try {
             int messageId = Integer.parseInt(ctx.pathParam("message_id"));
-            Message retrievedMessage = svc.getMessageByMessageID(messageId);
-            String resultString = om.writeValueAsString(retrievedMessage);
-            ctx.result(resultString);
-        } catch (InvalidMessageIDException e) {
-            ctx.result("");
-        } catch (NumberFormatException e) {
-            ctx.result("");
+            Message messageUpdate = mapper.readValue(ctx.body(), Message.class);
+            Message updatedMessage = messageService.updateMessage(messageId, messageUpdate.getMessage_text());
+            if (updatedMessage != null) {
+                ctx.json(updatedMessage);
+            } else {
+                ctx.status(400);
+            }
+        } catch (JsonProcessingException e) {
+            ctx.status(400);
         }
     }
 
-    private void deleteMessage(Context ctx) throws JsonProcessingException {
-        int messageId = Integer.parseInt(ctx.pathParam("message_id"));
-        Message deletedMessage;
-        String resultString;
-        try {
-            deletedMessage = svc.deleteMessage(messageId);
-            resultString = om.writeValueAsString(deletedMessage);
-        } catch (InvalidMessageIDException e) {
-            resultString = "";
-        }
-        ctx.result(resultString);
-    }
-
-    private void getUsersMessages(Context ctx) throws JsonProcessingException {
+    private void getMessagesByUserHandler(Context ctx) {
         int accountId = Integer.parseInt(ctx.pathParam("account_id"));
-        String resultString;
-        try {
-            resultString = om.writeValueAsString(svc.getAllAccountsMessages(accountId));
-            ctx.result(resultString);
-        } catch (InvalidAccountIDException e) {
-            ctx.result("");
-        }
+        ctx.json(messageService.getMessagesByUser(accountId));
     }
-
 }
