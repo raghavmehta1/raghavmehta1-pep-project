@@ -81,6 +81,10 @@ public class ServiceDAO {
     }
 
     public Message createMessage(Message newMessage) {
+        if (newMessage.getMessage_text() == null || newMessage.getMessage_text().trim().isEmpty() || 
+            newMessage.getMessage_text().length() > 255) {
+            throw new RuntimeException("Invalid message text");
+        }
         String sql = "INSERT INTO message (posted_by, message_text, time_posted_epoch) VALUES (?, ?, ?);";
         try (PreparedStatement stmt = conn.prepareStatement(sql, Statement.RETURN_GENERATED_KEYS)) {
             stmt.setInt(1, newMessage.getPosted_by());

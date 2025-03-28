@@ -19,7 +19,8 @@ public class ConnectionUtil {
 	public static Connection getConnection() {
 		if (conn == null) {
 			try {
-				conn =  DriverManager.getConnection(connectionString);
+				conn = DriverManager.getConnection(connectionString);
+				conn.setAutoCommit(true);
 			} catch (SQLException e) {
 				e.printStackTrace();
 			}

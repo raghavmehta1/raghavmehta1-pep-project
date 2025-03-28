@@ -72,32 +72,34 @@ public class SocialMediaController {
         JsonNode root = om.readTree(ctx.body());
         String messageText = root.get("message_text").asText();
 
-        if (messageText.length() > 0 && messageText.length() <= 255) {
+        if (messageText == null || messageText.trim().isEmpty() || messageText.length() > 255) {
+            ctx.result("").status(400);
+            return;
+        }
+
+        try {
             int message_id = Integer.parseInt(ctx.pathParam("message_id"));
-            String resultString;
-            try {
-                Message updatedMessage = svc.updateMessage(message_id, messageText);
-                resultString = om.writeValueAsString(updatedMessage);
-                ctx.result(resultString);
-            } catch (InvalidMessageIDException e) {
-                ctx.result("").status(400);
-            }
-        } else {
+            Message updatedMessage = svc.updateMessage(message_id, messageText);
+            String resultString = om.writeValueAsString(updatedMessage);
+            ctx.result(resultString);
+        } catch (InvalidMessageIDException e) {
+            ctx.result("").status(400);
+        } catch (NumberFormatException e) {
             ctx.result("").status(400);
         }
     }
 
     private void getMessage(Context ctx) throws JsonProcessingException {
-        int messageId = Integer.parseInt(ctx.pathParam("message_id"));
-        Message retrievedMessage;
-        String resultString;
         try {
-            retrievedMessage = svc.getMessageByMessageID(messageId);
-            resultString = om.writeValueAsString(retrievedMessage);
+            int messageId = Integer.parseInt(ctx.pathParam("message_id"));
+            Message retrievedMessage = svc.getMessageByMessageID(messageId);
+            String resultString = om.writeValueAsString(retrievedMessage);
+            ctx.result(resultString);
         } catch (InvalidMessageIDException e) {
-            resultString = "";
+            ctx.result("");
+        } catch (NumberFormatException e) {
+            ctx.result("");
         }
-        ctx.result(resultString);
     }
 
     private void deleteMessage(Context ctx) throws JsonProcessingException {
